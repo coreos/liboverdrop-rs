@@ -68,9 +68,9 @@ impl FragmentScanner {
     ///
     /// ```
     /// let base_dirs = vec![
-    ///     "/usr/lib".to_string(),
-    ///     "/run".to_string(),
-    ///     "/etc".to_string(),
+    ///     String::from("/usr/lib"),
+    ///     String::from("/run"),
+    ///     String::from("/etc"),
     /// ];
     /// let allowed_extensions = vec![
     ///     String::from("toml"),
