@@ -80,7 +80,11 @@ impl FragmentScanner {
             dpath.push(shared_path.clone());
             dirs.push(dpath);
         }
-        Self { dirs, ignore_dotfiles, allowed_extensions }
+        Self {
+            dirs,
+            ignore_dotfiles,
+            allowed_extensions,
+        }
     }
 
     /// Scan unique configuration fragments from the set configuration directories. Returns a
@@ -171,7 +175,10 @@ mod tests {
         filename: &String,
         filepath: &String,
     ) -> () {
-        assert_eq!(fragments.get(filename).unwrap(), &path::PathBuf::from(filepath));
+        assert_eq!(
+            fragments.get(filename).unwrap(),
+            &path::PathBuf::from(filepath)
+        );
     }
 
     fn assert_fragments_hit(
@@ -196,19 +203,38 @@ mod tests {
             format!("{}/{}", treedir, "run"),
             format!("{}/{}", treedir, "etc"),
         ];
-        let allowed_extensions = vec![
-            String::from("toml"),
-        ];
+        let allowed_extensions = vec![String::from("toml")];
         let od_cfg = FragmentScanner::new(dirs, "liboverdrop.d", false, allowed_extensions);
 
         let expected_fragments = vec![
-            FragmentNamePath { name: String::from("01-config-a.toml"), path: treedir.to_owned() + "/etc/liboverdrop.d/01-config-a.toml" },
-            FragmentNamePath { name: String::from("02-config-b.toml"), path: treedir.to_owned() + "/run/liboverdrop.d/02-config-b.toml" },
-            FragmentNamePath { name: String::from("03-config-c.toml"), path: treedir.to_owned() + "/etc/liboverdrop.d/03-config-c.toml" },
-            FragmentNamePath { name: String::from("04-config-d.toml"), path: treedir.to_owned() + "/usr/lib/liboverdrop.d/04-config-d.toml" },
-            FragmentNamePath { name: String::from("05-config-e.toml"), path: treedir.to_owned() + "/etc/liboverdrop.d/05-config-e.toml" },
-            FragmentNamePath { name: String::from("06-config-f.toml"), path: treedir.to_owned() + "/run/liboverdrop.d/06-config-f.toml" },
-            FragmentNamePath { name: String::from("07-config-g.toml"), path: treedir.to_owned() + "/etc/liboverdrop.d/07-config-g.toml" },
+            FragmentNamePath {
+                name: String::from("01-config-a.toml"),
+                path: treedir.to_owned() + "/etc/liboverdrop.d/01-config-a.toml",
+            },
+            FragmentNamePath {
+                name: String::from("02-config-b.toml"),
+                path: treedir.to_owned() + "/run/liboverdrop.d/02-config-b.toml",
+            },
+            FragmentNamePath {
+                name: String::from("03-config-c.toml"),
+                path: treedir.to_owned() + "/etc/liboverdrop.d/03-config-c.toml",
+            },
+            FragmentNamePath {
+                name: String::from("04-config-d.toml"),
+                path: treedir.to_owned() + "/usr/lib/liboverdrop.d/04-config-d.toml",
+            },
+            FragmentNamePath {
+                name: String::from("05-config-e.toml"),
+                path: treedir.to_owned() + "/etc/liboverdrop.d/05-config-e.toml",
+            },
+            FragmentNamePath {
+                name: String::from("06-config-f.toml"),
+                path: treedir.to_owned() + "/run/liboverdrop.d/06-config-f.toml",
+            },
+            FragmentNamePath {
+                name: String::from("07-config-g.toml"),
+                path: treedir.to_owned() + "/etc/liboverdrop.d/07-config-g.toml",
+            },
         ];
 
         let fragments = od_cfg.scan();
@@ -226,12 +252,8 @@ mod tests {
     #[test]
     fn basic_override_restrict_extensions() {
         let treedir = "tests/fixtures/tree-basic";
-        let dirs = vec![
-            format!("{}/{}", treedir, "etc"),
-        ];
-        let allowed_extensions = vec![
-            String::from("toml"),
-        ];
+        let dirs = vec![format!("{}/{}", treedir, "etc")];
+        let allowed_extensions = vec![String::from("toml")];
         let od_cfg = FragmentScanner::new(dirs, "liboverdrop.d", false, allowed_extensions);
 
         let fragments = od_cfg.scan();
@@ -244,9 +266,7 @@ mod tests {
     #[test]
     fn basic_override_allow_all_extensions() {
         let treedir = "tests/fixtures/tree-basic";
-        let dirs = vec![
-            format!("{}/{}", treedir, "etc"),
-        ];
+        let dirs = vec![format!("{}/{}", treedir, "etc")];
         let allowed_extensions = vec![];
         let od_cfg = FragmentScanner::new(dirs, "liboverdrop.d", false, allowed_extensions);
 
@@ -260,9 +280,7 @@ mod tests {
     #[test]
     fn basic_override_ignore_hidden() {
         let treedir = "tests/fixtures/tree-basic";
-        let dirs = vec![
-            format!("{}/{}", treedir, "etc"),
-        ];
+        let dirs = vec![format!("{}/{}", treedir, "etc")];
         let allowed_extensions = vec![];
         let od_cfg = FragmentScanner::new(dirs, "liboverdrop.d", true, allowed_extensions);
 
@@ -275,9 +293,7 @@ mod tests {
     #[test]
     fn basic_override_allow_hidden() {
         let treedir = "tests/fixtures/tree-basic";
-        let dirs = vec![
-            format!("{}/{}", treedir, "etc"),
-        ];
+        let dirs = vec![format!("{}/{}", treedir, "etc")];
         let allowed_extensions = vec![];
         let od_cfg = FragmentScanner::new(dirs, "liboverdrop.d", false, allowed_extensions);
 
