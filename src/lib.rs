@@ -1,6 +1,49 @@
+//! Simple library to handle configuration fragments.
+//!
+//! This crate provides helpers to scan configuration fragments on disk.
+//! The goal is to help in writing Linux services which are shipped as part of a [Reproducible OS][reproducible].
+//! Its name derives from **over**lays and **drop**ins (base directories and configuration fragments).
+//!
+//! The main entrypoint is [`FragmentScanner`](struct.FragmentScanner.html). It scans
+//! for configuration fragments across multiple directories (with increasing priority),
+//! following these rules:
+//!
+//!  * fragments are identified by unique filenames, lexicographically (e.g. `50-default-limits.conf`).
+//!  * in case of name duplication, last directory wins (e.g. `/etc/svc/custom.conf` can override `/usr/lib/svc/custom.conf`).
+//!  * a fragment symlinked to `/dev/null` is used to ignore any previous fragment with the same filename.
+//!
+//! [reproducible]: http://0pointer.net/blog/projects/stateless.html
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! # use liboverdrop::FragmentScanner;
+//! // Scan for fragments under:
+//! //  * /usr/lib/my-crate/config.d/*.toml
+//! //  * /run/my-crate/config.d/*.toml
+//! //  * /etc/my-crate/config.d/*.toml
+//!
+//! let base_dirs = vec![
+//!     "/usr/lib".to_string(),
+//!     "/run".to_string(),
+//!     "/etc".to_string(),
+//! ];
+//! let allowed_extensions = vec![
+//!     String::from("toml"),
+//! ];
+//! let od_cfg = FragmentScanner::new(base_dirs, "my-crate/config.d", false, allowed_extensions);
+//!
+//! let fragments = od_cfg.scan();
+//! for (filename, filepath) in fragments {
+//!     println!("fragment '{}' located at '{}'", filename, filepath.display());
+//! }
+//! ```
+
 use log::trace;
 use std::{collections, fs, path};
 
+/// Configuration fragments scanner.
+#[derive(Debug)]
 pub struct FragmentScanner {
     dirs: Vec<path::PathBuf>,
     ignore_dotfiles: bool,
@@ -25,22 +68,6 @@ impl FragmentScanner {
     ///
     /// `shared_path` is concatenated to each entry in `base_dirs` to form the directory paths to
     /// scan.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// let base_dirs = vec![
-    ///     String::from("/usr/lib"),
-    ///     String::from("/run"),
-    ///     String::from("/etc"),
-    /// ];
-    /// let allowed_extensions = vec![
-    ///     String::from("toml"),
-    /// ];
-    ///
-    /// use liboverdrop::FragmentScanner;
-    /// let od_cfg = FragmentScanner::new(base_dirs, "my-crate/config.d", false, allowed_extensions);
-    /// ```
     pub fn new(
         base_dirs: Vec<String>,
         shared_path: &str,
@@ -63,26 +90,7 @@ impl FragmentScanner {
     /// Configuration fragments are stored in the `BTreeMap` in alphanumeric order by filename.
     /// Configuration fragments existing in directories that are scanned later override fragments
     /// of the same filename in directories that are scanned earlier.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// let base_dirs = vec![
-    ///     "/usr/lib".to_string(),
-    ///     "/run".to_string(),
-    ///     "/etc".to_string(),
-    /// ];
-    /// let allowed_extensions = vec![
-    ///     String::from("toml"),
-    /// ];
-    ///
-    /// use liboverdrop::FragmentScanner;
-    /// let od_cfg = FragmentScanner::new(base_dirs, "my-crate/config.d", false, allowed_extensions);
-    /// let fragments = od_cfg.scan();
-    /// ```
-    pub fn scan(
-        &self,
-    ) -> collections::BTreeMap<String, path::PathBuf> {
+    pub fn scan(&self) -> collections::BTreeMap<String, path::PathBuf> {
         let mut files_map = collections::BTreeMap::new();
         for dir in &self.dirs {
             trace!("Scanning directory '{}'", dir.display());
