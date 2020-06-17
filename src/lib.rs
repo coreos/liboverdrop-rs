@@ -23,15 +23,15 @@
 //! //  * /run/my-crate/config.d/*.toml
 //! //  * /etc/my-crate/config.d/*.toml
 //!
-//! let base_dirs = vec![
-//!     "/usr/lib".to_string(),
-//!     "/run".to_string(),
-//!     "/etc".to_string(),
+//! let base_dirs = [
+//!     "/usr/lib",
+//!     "/run",
+//!     "/etc",
 //! ];
 //! let allowed_extensions = vec![
 //!     String::from("toml"),
 //! ];
-//! let od_cfg = FragmentScanner::new(base_dirs, "my-crate/config.d", false, allowed_extensions);
+//! let od_cfg = FragmentScanner::new(&base_dirs, "my-crate/config.d", false, allowed_extensions);
 //!
 //! let fragments = od_cfg.scan();
 //! for (filename, filepath) in fragments {
@@ -68,20 +68,15 @@ impl FragmentScanner {
     ///
     /// `shared_path` is concatenated to each entry in `base_dirs` to form the directory paths to
     /// scan.
-    pub fn new(
-        base_dirs: Vec<String>,
-        shared_path: &str,
+    pub fn new<BdS: AsRef<path::Path>, BdI: IntoIterator<Item=BdS>, Sp: AsRef<path::Path>>(
+        base_dirs: BdI,
+        shared_path: Sp,
         ignore_dotfiles: bool,
         allowed_extensions: Vec<String>,
     ) -> Self {
-        let mut dirs = Vec::with_capacity(base_dirs.len());
-        for bdir in base_dirs {
-            let mut dpath = path::PathBuf::from(bdir);
-            dpath.push(shared_path);
-            dirs.push(dpath);
-        }
+        let shared_path = shared_path.as_ref();
         Self {
-            dirs,
+            dirs: base_dirs.into_iter().map(|bdir| bdir.as_ref().join(shared_path)).collect(),
             ignore_dotfiles,
             allowed_extensions,
         }
@@ -198,13 +193,13 @@ mod tests {
     #[test]
     fn basic_override() {
         let treedir = "tests/fixtures/tree-basic";
-        let dirs = vec![
+        let dirs = [
             format!("{}/{}", treedir, "usr/lib"),
             format!("{}/{}", treedir, "run"),
             format!("{}/{}", treedir, "etc"),
         ];
         let allowed_extensions = vec![String::from("toml")];
-        let od_cfg = FragmentScanner::new(dirs, "liboverdrop.d", false, allowed_extensions);
+        let od_cfg = FragmentScanner::new(&dirs, "liboverdrop.d", false, allowed_extensions);
 
         let expected_fragments = vec![
             FragmentNamePath {
@@ -252,9 +247,9 @@ mod tests {
     #[test]
     fn basic_override_restrict_extensions() {
         let treedir = "tests/fixtures/tree-basic";
-        let dirs = vec![format!("{}/{}", treedir, "etc")];
+        let dirs = [format!("{}/{}", treedir, "etc")];
         let allowed_extensions = vec![String::from("toml")];
-        let od_cfg = FragmentScanner::new(dirs, "liboverdrop.d", false, allowed_extensions);
+        let od_cfg = FragmentScanner::new(&dirs, "liboverdrop.d", false, allowed_extensions);
 
         let fragments = od_cfg.scan();
 
@@ -268,7 +263,7 @@ mod tests {
         let treedir = "tests/fixtures/tree-basic";
         let dirs = vec![format!("{}/{}", treedir, "etc")];
         let allowed_extensions = vec![];
-        let od_cfg = FragmentScanner::new(dirs, "liboverdrop.d", false, allowed_extensions);
+        let od_cfg = FragmentScanner::new(&dirs, "liboverdrop.d", false, allowed_extensions);
 
         let fragments = od_cfg.scan();
 
@@ -280,9 +275,9 @@ mod tests {
     #[test]
     fn basic_override_ignore_hidden() {
         let treedir = "tests/fixtures/tree-basic";
-        let dirs = vec![format!("{}/{}", treedir, "etc")];
+        let dirs = [format!("{}/{}", treedir, "etc")];
         let allowed_extensions = vec![];
-        let od_cfg = FragmentScanner::new(dirs, "liboverdrop.d", true, allowed_extensions);
+        let od_cfg = FragmentScanner::new(&dirs, "liboverdrop.d", true, allowed_extensions);
 
         let fragments = od_cfg.scan();
 
@@ -293,9 +288,9 @@ mod tests {
     #[test]
     fn basic_override_allow_hidden() {
         let treedir = "tests/fixtures/tree-basic";
-        let dirs = vec![format!("{}/{}", treedir, "etc")];
+        let dirs = [format!("{}/{}", treedir, "etc")];
         let allowed_extensions = vec![];
-        let od_cfg = FragmentScanner::new(dirs, "liboverdrop.d", false, allowed_extensions);
+        let od_cfg = FragmentScanner::new(&dirs, "liboverdrop.d", false, allowed_extensions);
 
         let fragments = od_cfg.scan();
 
