@@ -4,7 +4,7 @@
 //! The goal is to help in writing Linux services which are shipped as part of a [Reproducible OS][reproducible].
 //! Its name derives from **over**lays and **drop**ins (base directories and configuration fragments).
 //!
-//! The main entrypoint is [`FragmentScanner`](struct.FragmentScanner.html). It scans
+//! The main entrypoint is [`scan`](fn.scan.html). It scans
 //! for configuration fragments across multiple directories (with increasing priority),
 //! following these rules:
 //!
@@ -17,7 +17,7 @@
 //! # Example
 //!
 //! ```rust,no_run
-//! # use liboverdrop::FragmentScanner;
+//! # use liboverdrop;
 //! // Scan for fragments under:
 //! //  * /usr/lib/my-crate/config.d/*.toml
 //! //  * /run/my-crate/config.d/*.toml
@@ -28,132 +28,100 @@
 //!     "/run",
 //!     "/etc",
 //! ];
-//! let allowed_extensions = vec![
-//!     String::from("toml"),
-//! ];
-//! let od_cfg = FragmentScanner::new(&base_dirs, "my-crate/config.d", false, allowed_extensions);
+//! let fragments = liboverdrop::scan(&base_dirs, "my-crate/config.d", false, &["toml"]);
 //!
-//! let fragments = od_cfg.scan();
 //! for (filename, filepath) in fragments {
 //!     println!("fragment '{}' located at '{}'", filename, filepath.display());
 //! }
 //! ```
 
 use log::trace;
-use std::{collections, fs, path};
+use std::{collections, ffi, fs, path};
 
-/// Configuration fragments scanner.
-#[derive(Debug)]
-pub struct FragmentScanner {
-    dirs: Vec<path::PathBuf>,
+
+/// Scan unique configuration fragments from the configuration directories specified.
+///
+/// # Arguments
+///
+/// * `base_dirs` - Base components of directories where configuration fragments are located.
+/// * `shared_path` - Common relative path from each entry in `base_dirs` to the directory
+///                   holding configuration fragments.
+/// * `ignore_dotfiles` - Whether to ignore dotfiles (hidden files with name prefixed with '.').
+/// * `allowed_extensions` - Only scan files that have an extension listed in `allowed_extensions`.
+///                          If an empty slice is passed, then all extensions are allowed.
+///
+/// `shared_path` is joined onto each entry in `base_dirs` to form the directory paths to scan.
+///
+/// Returns a `BTreeMap` indexed by configuration fragment filename,
+/// holding the path where the unique configuration fragment is located.
+///
+/// Configuration fragments are stored in the `BTreeMap` in alphanumeric order by filename.
+/// Configuration fragments existing in directories that are scanned later override fragments
+/// of the same filename in directories that are scanned earlier.
+pub fn scan<BdS: AsRef<path::Path>, BdI: IntoIterator<Item=BdS>, Sp: AsRef<path::Path>, As: AsRef<ffi::OsStr>>(
+    base_dirs: BdI,
+    shared_path: Sp,
     ignore_dotfiles: bool,
-    allowed_extensions: Vec<String>,
-}
+    allowed_extensions: &[As],
+) -> collections::BTreeMap<String, path::PathBuf> {
+    let shared_path = shared_path.as_ref();
 
-impl FragmentScanner {
-    /// Returns a new FragmentScanner, initialized with a vector of directory paths to scan for
-    /// configuration fragments.
-    ///
-    /// # Arguments
-    ///
-    /// * `base_dirs` - Vector holding base components of directories where configuration fragments
-    ///                 are located.
-    /// * `shared_path` - Common relative path from each entry in `base_dirs` to the directory
-    ///                   holding configuration fragments.
-    /// * `ignore_dotfiles` - Whether to ignore dotfiles (hidden files with name prefixed with
-    ///                       '.').
-    /// * `allowed_extensions` - Only scan files that have an extension listed in
-    ///                          `allowed_extensions`. If an empty vector is passed, then any
-    ///                          extensions are allowed.
-    ///
-    /// `shared_path` is concatenated to each entry in `base_dirs` to form the directory paths to
-    /// scan.
-    pub fn new<BdS: AsRef<path::Path>, BdI: IntoIterator<Item=BdS>, Sp: AsRef<path::Path>>(
-        base_dirs: BdI,
-        shared_path: Sp,
-        ignore_dotfiles: bool,
-        allowed_extensions: Vec<String>,
-    ) -> Self {
-        let shared_path = shared_path.as_ref();
-        Self {
-            dirs: base_dirs.into_iter().map(|bdir| bdir.as_ref().join(shared_path)).collect(),
-            ignore_dotfiles,
-            allowed_extensions,
-        }
-    }
+    let mut files_map = collections::BTreeMap::new();
+    for dir in base_dirs {
+        let dir = dir.as_ref().join(shared_path);
+        trace!("Scanning directory '{}'", dir.display());
 
-    /// Scan unique configuration fragments from the set configuration directories. Returns a
-    /// `collections::BTreeMap` indexed by configuration fragment filename, holding the path where
-    /// the unique configuration fragment is located.
-    ///
-    /// Configuration fragments are stored in the `BTreeMap` in alphanumeric order by filename.
-    /// Configuration fragments existing in directories that are scanned later override fragments
-    /// of the same filename in directories that are scanned earlier.
-    pub fn scan(&self) -> collections::BTreeMap<String, path::PathBuf> {
-        let mut files_map = collections::BTreeMap::new();
-        for dir in &self.dirs {
-            trace!("Scanning directory '{}'", dir.display());
-
-            let dir_iter = match fs::read_dir(dir) {
-                Ok(iter) => iter,
+        let dir_iter = match fs::read_dir(dir) {
+            Ok(iter) => iter,
+            _ => continue,
+        };
+        for entry in dir_iter.flatten() {
+            let fpath = entry.path();
+            let fname = match entry.file_name().into_string() {
+                Ok(n) => n,
                 _ => continue,
             };
-            for dir_entry in dir_iter {
-                let entry = match dir_entry {
-                    Ok(f) => f,
-                    _ => continue,
-                };
-                let fpath = entry.path();
-                let fname = match entry.file_name().into_string() {
-                    Ok(n) => n,
-                    _ => continue,
-                };
 
-                // If hidden files not allowed, ignore dotfiles.
-                if self.ignore_dotfiles && fname.starts_with('.') {
-                    continue;
-                };
+            // If hidden files not allowed, ignore dotfiles.
+            if ignore_dotfiles && fname.starts_with('.') {
+                continue;
+            };
 
-                // If extensions are specified, proceed only if filename has one of the allowed
-                // extensions.
-                if !self.allowed_extensions.is_empty() {
-                    if let Some(extension) = fpath.extension() {
-                        if let Ok(extension) = &extension.to_owned().into_string() {
-                            if !self.allowed_extensions.contains(extension) {
-                                continue;
-                            }
-                        } else {
-                            continue;
-                        }
-                    } else {
+            // If extensions are specified, proceed only if filename has one of the allowed
+            // extensions.
+            if !allowed_extensions.is_empty() {
+                if let Some(extension) = fpath.extension() {
+                    if !allowed_extensions.iter().map(|ae| ae.as_ref()).any(|ae| ae == extension) {
                         continue;
                     }
-                }
-
-                // Check filetype, ignore non-file.
-                let meta = match entry.metadata() {
-                    Ok(m) => m,
-                    _ => continue,
-                };
-                if !meta.file_type().is_file() {
-                    if let Ok(target) = fs::read_link(&fpath) {
-                        // A devnull symlink is a special case to ignore previous file-names.
-                        if target == path::PathBuf::from("/dev/null") {
-                            trace!("Nulled config file '{}'", fpath.display());
-                            files_map.remove(&fname);
-                        }
-                    }
+                } else {
                     continue;
                 }
-
-                // TODO(lucab): return something smarter than a PathBuf.
-                trace!("Found config file '{}' at '{}'", fname, fpath.display());
-                files_map.insert(fname, fpath);
             }
-        }
 
-        files_map
+            // Check filetype, ignore non-file.
+            let meta = match entry.metadata() {
+                Ok(m) => m,
+                _ => continue,
+            };
+            if !meta.file_type().is_file() {
+                if let Ok(target) = fs::read_link(&fpath) {
+                    // A devnull symlink is a special case to ignore previous file-names.
+                    if target == path::Path::new("/dev/null") {
+                        trace!("Nulled config file '{}'", fpath.display());
+                        files_map.remove(&fname);
+                    }
+                }
+                continue;
+            }
+
+            // TODO(lucab): return something smarter than a PathBuf.
+            trace!("Found config file '{}' at '{}'", fname, fpath.display());
+            files_map.insert(fname, fpath);
+        }
     }
+
+    files_map
 }
 
 #[cfg(test)]
@@ -198,8 +166,7 @@ mod tests {
             format!("{}/{}", treedir, "run"),
             format!("{}/{}", treedir, "etc"),
         ];
-        let allowed_extensions = vec![String::from("toml")];
-        let od_cfg = FragmentScanner::new(&dirs, "liboverdrop.d", false, allowed_extensions);
+        let allowed_extensions = ["toml"];
 
         let expected_fragments = vec![
             FragmentNamePath {
@@ -232,7 +199,7 @@ mod tests {
             },
         ];
 
-        let fragments = od_cfg.scan();
+        let fragments = scan(&dirs, "liboverdrop.d", false, &allowed_extensions);
 
         for frag in &expected_fragments {
             assert_fragments_match(&fragments, &frag.name, &frag.path);
@@ -248,10 +215,9 @@ mod tests {
     fn basic_override_restrict_extensions() {
         let treedir = "tests/fixtures/tree-basic";
         let dirs = [format!("{}/{}", treedir, "etc")];
-        let allowed_extensions = vec![String::from("toml")];
-        let od_cfg = FragmentScanner::new(&dirs, "liboverdrop.d", false, allowed_extensions);
+        let allowed_extensions = ["toml"];
 
-        let fragments = od_cfg.scan();
+        let fragments = scan(&dirs, "liboverdrop.d", false, &allowed_extensions);
 
         assert_fragments_hit(&fragments, "01-config-a.toml");
         assert_fragments_miss(&fragments, "08-config-h.conf");
@@ -262,10 +228,8 @@ mod tests {
     fn basic_override_allow_all_extensions() {
         let treedir = "tests/fixtures/tree-basic";
         let dirs = vec![format!("{}/{}", treedir, "etc")];
-        let allowed_extensions = vec![];
-        let od_cfg = FragmentScanner::new(&dirs, "liboverdrop.d", false, allowed_extensions);
 
-        let fragments = od_cfg.scan();
+        let fragments = scan::<_, _, _, &str>(&dirs, "liboverdrop.d", false, &[]);
 
         assert_fragments_hit(&fragments, "01-config-a.toml");
         assert_fragments_hit(&fragments, "config.conf");
@@ -276,10 +240,8 @@ mod tests {
     fn basic_override_ignore_hidden() {
         let treedir = "tests/fixtures/tree-basic";
         let dirs = [format!("{}/{}", treedir, "etc")];
-        let allowed_extensions = vec![];
-        let od_cfg = FragmentScanner::new(&dirs, "liboverdrop.d", true, allowed_extensions);
 
-        let fragments = od_cfg.scan();
+        let fragments = scan::<_, _, _, &str>(&dirs, "liboverdrop.d", true, &[]);
 
         assert_fragments_hit(&fragments, "config.conf");
         assert_fragments_miss(&fragments, ".hidden.conf");
@@ -289,10 +251,8 @@ mod tests {
     fn basic_override_allow_hidden() {
         let treedir = "tests/fixtures/tree-basic";
         let dirs = [format!("{}/{}", treedir, "etc")];
-        let allowed_extensions = vec![];
-        let od_cfg = FragmentScanner::new(&dirs, "liboverdrop.d", false, allowed_extensions);
 
-        let fragments = od_cfg.scan();
+        let fragments = scan::<_, _, _, &ffi::OsStr>(&dirs, "liboverdrop.d", false, &[]);
 
         assert_fragments_hit(&fragments, "config.conf");
         assert_fragments_hit(&fragments, ".hidden.conf");
