@@ -77,7 +77,7 @@ impl FragmentScanner {
         let mut dirs = Vec::with_capacity(base_dirs.len());
         for bdir in base_dirs {
             let mut dpath = path::PathBuf::from(bdir);
-            dpath.push(shared_path.clone());
+            dpath.push(shared_path);
             dirs.push(dpath);
         }
         Self {
@@ -124,7 +124,7 @@ impl FragmentScanner {
                 if !self.allowed_extensions.is_empty() {
                     if let Some(extension) = fpath.extension() {
                         if let Ok(extension) = &extension.to_owned().into_string() {
-                            if !self.allowed_extensions.contains(&extension) {
+                            if !self.allowed_extensions.contains(extension) {
                                 continue;
                             }
                         } else {
