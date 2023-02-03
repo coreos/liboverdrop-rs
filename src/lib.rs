@@ -40,12 +40,14 @@
 //! ```
 
 use log::trace;
-use std::{collections, fs, path};
+use std::collections::BTreeMap;
+use std::fs;
+use std::path::PathBuf;
 
 /// Configuration fragments scanner.
 #[derive(Debug)]
 pub struct FragmentScanner {
-    dirs: Vec<path::PathBuf>,
+    dirs: Vec<PathBuf>,
     ignore_dotfiles: bool,
     allowed_extensions: Vec<String>,
 }
@@ -76,7 +78,7 @@ impl FragmentScanner {
     ) -> Self {
         let mut dirs = Vec::with_capacity(base_dirs.len());
         for bdir in base_dirs {
-            let mut dpath = path::PathBuf::from(bdir);
+            let mut dpath = PathBuf::from(bdir);
             dpath.push(shared_path);
             dirs.push(dpath);
         }
@@ -88,14 +90,14 @@ impl FragmentScanner {
     }
 
     /// Scan unique configuration fragments from the set configuration directories. Returns a
-    /// `collections::BTreeMap` indexed by configuration fragment filename, holding the path where
+    /// `std::collections::BTreeMap` indexed by configuration fragment filename, holding the path where
     /// the unique configuration fragment is located.
     ///
     /// Configuration fragments are stored in the `BTreeMap` in alphanumeric order by filename.
     /// Configuration fragments existing in directories that are scanned later override fragments
     /// of the same filename in directories that are scanned earlier.
-    pub fn scan(&self) -> collections::BTreeMap<String, path::PathBuf> {
-        let mut files_map = collections::BTreeMap::new();
+    pub fn scan(&self) -> BTreeMap<String, PathBuf> {
+        let mut files_map = BTreeMap::new();
         for dir in &self.dirs {
             trace!("Scanning directory '{}'", dir.display());
 
@@ -143,7 +145,7 @@ impl FragmentScanner {
                 if !meta.file_type().is_file() {
                     if let Ok(target) = fs::read_link(&fpath) {
                         // A devnull symlink is a special case to ignore previous file-names.
-                        if target == path::PathBuf::from("/dev/null") {
+                        if target == PathBuf::from("/dev/null") {
                             trace!("Nulled config file '{}'", fpath.display());
                             files_map.remove(&fname);
                         }
@@ -171,27 +173,18 @@ mod tests {
     }
 
     fn assert_fragments_match(
-        fragments: &collections::BTreeMap<String, path::PathBuf>,
+        fragments: &BTreeMap<String, PathBuf>,
         filename: &String,
         filepath: &String,
     ) -> () {
-        assert_eq!(
-            fragments.get(filename).unwrap(),
-            &path::PathBuf::from(filepath)
-        );
+        assert_eq!(fragments.get(filename).unwrap(), &PathBuf::from(filepath));
     }
 
-    fn assert_fragments_hit(
-        fragments: &collections::BTreeMap<String, path::PathBuf>,
-        filename: &str,
-    ) -> () {
+    fn assert_fragments_hit(fragments: &BTreeMap<String, PathBuf>, filename: &str) -> () {
         assert!(fragments.get(&String::from(filename)).is_some());
     }
 
-    fn assert_fragments_miss(
-        fragments: &collections::BTreeMap<String, path::PathBuf>,
-        filename: &str,
-    ) -> () {
+    fn assert_fragments_miss(fragments: &BTreeMap<String, PathBuf>, filename: &str) -> () {
         assert!(fragments.get(&String::from(filename)).is_none());
     }
 
