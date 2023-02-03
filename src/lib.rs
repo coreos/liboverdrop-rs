@@ -127,12 +127,8 @@ impl FragmentScanner {
                 // If extensions are specified, proceed only if filename has one of the allowed
                 // extensions.
                 if !self.allowed_extensions.is_empty() {
-                    if let Some(extension) = fpath.extension() {
-                        if let Ok(extension) = &extension.to_owned().into_string() {
-                            if !self.allowed_extensions.contains(extension) {
-                                continue;
-                            }
-                        } else {
+                    if let Some(extension) = fpath.extension().and_then(|x| x.to_str()) {
+                        if !self.allowed_extensions.iter().any(|ax| ax == extension) {
                             continue;
                         }
                     } else {
