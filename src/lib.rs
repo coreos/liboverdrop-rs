@@ -34,6 +34,41 @@
 //!     println!("fragment '{}' located at '{}'", filename.to_string_lossy(), filepath.display());
 //! }
 //! ```
+//!
+//! # Migrating from liboverdrop 0.0.x
+//!
+//! The signature changed from
+//! ```rust,compile_fail
+//! # use liboverdrop::FragmentScanner;
+//! let base_dirs: Vec<String> = vec![/**/];
+//! let shared_path: &str = "config.d";
+//! let allowed_extensions: Vec<String> = vec![/**/];
+//! for (basename, filepath) in FragmentScanner::new(
+//!                                 base_dirs, shared_path, false, allowed_extensions).scan() {
+//!     // basename: String
+//!     // filepath: PathBuf
+//! }
+//! ```
+//! to
+//! ```rust,no_run
+//! # use liboverdrop;
+//! # /*
+//! let base_dirs: IntoIterator<Item = AsRef<Path>> = /* could be anything */;
+//! let shared_path: AsRef<Path> = /* ... */;
+//! let allowed_extensions: &[AsRef<OsStr>] = &[/* ... */];
+//! # */
+//! # let base_dirs = [""];
+//! # let shared_path = "";
+//! # let allowed_extensions = &[""];
+//! for (basename, filepath) in liboverdrop::scan(
+//!                                 base_dirs, shared_path, allowed_extensions, false) {
+//!     // basename: OsString
+//!     // filepath: PathBuf
+//! }
+//! ```
+//!
+//! When updating, re-consider if you need to allocate any argument now,
+//! since they can all be literals or borrowed.
 
 use log::trace;
 use std::collections::BTreeMap;
