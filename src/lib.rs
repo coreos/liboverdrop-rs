@@ -42,7 +42,10 @@
 use log::trace;
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+/// The well-known path to the null device used for overrides.
+const DEVNULL: &str = "/dev/null";
 
 /// Configuration fragments scanner.
 #[derive(Debug)]
@@ -145,7 +148,7 @@ impl FragmentScanner {
                 if !meta.file_type().is_file() {
                     if let Ok(target) = fs::read_link(&fpath) {
                         // A devnull symlink is a special case to ignore previous file-names.
-                        if target == PathBuf::from("/dev/null") {
+                        if target == Path::new(DEVNULL) {
                             trace!("Nulled config file '{}'", fpath.display());
                             files_map.remove(&fname);
                         }
