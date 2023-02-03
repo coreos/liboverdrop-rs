@@ -10,7 +10,7 @@ This crate provides helpers to scan configuration fragments on disk.
 The goal is to help in writing Linux services which are shipped as part of a [Reproducible OS][reproducible].
 Its name derives from **over**lays and **drop**ins (base directories and configuration fragments).
 
-The main entrypoint is [`FragmentScanner`](struct.FragmentScanner.html). It scans
+The main entrypoint is [`scan`](fn.scan.html). It scans
 for configuration fragments across multiple directories (with increasing priority),
 following these rules:
 
