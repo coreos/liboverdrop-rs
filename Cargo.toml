@@ -3,15 +3,10 @@ name = "liboverdrop"
 description = "Configuration library, with directory overlaying and fragments dropins"
 version = "0.0.3-alpha.0"
 license = "MIT/Apache-2.0"
-authors = ["Luca Bruno <luca.bruno@coreos.com>",
-           "Robert Fairley <rfairley@redhat.com>"]
+authors = ["Luca Bruno <luca.bruno@coreos.com>", "Robert Fairley <rfairley@redhat.com>"]
 repository = "https://github.com/overdrop/liboverdrop-rs"
 edition = "2018"
-exclude = [
-".gitignore",
-".travis.yml",
-]
-
+exclude = [".gitignore", ".travis.yml"]
 
 [dependencies]
 log = "^0.4.6"
