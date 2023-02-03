@@ -14,9 +14,8 @@ log = "^0.4.6"
 
 [package.metadata.release]
 sign-commit = true
-upload-doc = false
-disable-publish = true
-disable-push = true
+sign-tag = true
+push = false
+publish = false
 pre-release-commit-message = "cargo: liboverdrop release {{version}}"
-pro-release-commit-message = "cargo: development version bump"
 tag-message = "liboverdrop {{version}}"
