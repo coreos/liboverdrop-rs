@@ -7,7 +7,7 @@ authors = ["Luca Bruno <luca.bruno@coreos.com>", "Robert Fairley <rfairley@redha
 repository = "https://github.com/overdrop/liboverdrop-rs"
 rust-version = "1.56.0"
 edition = "2021"
-exclude = [".gitignore", ".travis.yml"]
+exclude = [".gitignore", ".github"]
 
 [dependencies]
 log = "^0.4.6"
