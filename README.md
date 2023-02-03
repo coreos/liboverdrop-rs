@@ -1,8 +1,8 @@
 # liboverdrop
 
-[![Build Status](https://travis-ci.com/overdrop/liboverdrop-rs.svg?branch=master)](https://travis-ci.com/overdrop/liboverdrop-rs)
 [![crates.io](https://img.shields.io/crates/v/liboverdrop.svg)](https://crates.io/crates/liboverdrop)
 [![Documentation](https://docs.rs/liboverdrop/badge.svg)](https://docs.rs/liboverdrop)
+![Rust 1.56+](https://img.shields.io/badge/Rust-1.56%2B-orange.svg)
 
 A simple Rust library to handle configuration fragments.
 
