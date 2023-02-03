@@ -79,6 +79,15 @@ use std::path::{Path, PathBuf};
 /// The well-known path to the null device used for overrides.
 const DEVNULL: &str = "/dev/null";
 
+/// The base search paths conventionally used by systemd and other projects.
+///
+/// Here, files in `/run` override those in `/etc`, which in turn override
+/// those in `/usr/lib`.
+///
+/// Note that some projects may want to omit `/usr/local`, which may be a distinct writable
+/// area from the OS image base.  To do so, one can explicitly filter it out from this set.
+pub const SYSTEMD_CONVENTIONAL_BASES: &[&str] = &["/usr/lib", "/usr/local/lib", "/etc", "/run"];
+
 /// Scan unique configuration fragments from the configuration directories specified.
 ///
 /// # Arguments
@@ -237,11 +246,39 @@ mod tests {
         }
 
         // Check keys are stored in the correct order.
-        let expected_keys: Vec<_> = expected_fragments
+        let expected_keys: Vec<_> = expected_fragments.into_iter().map(|kv| kv.0).collect();
+        let fragments_keys: Vec<_> = fragments.into_iter().map(|kv| kv.0).collect();
+        assert_eq!(fragments_keys, expected_keys);
+    }
+
+    #[test]
+    fn basic_override_systemd() {
+        let treedir = Path::new("tests/fixtures/tree-basic");
+
+        let expected_fragments = [
+            ("01-config-a.toml", "etc/liboverdrop.d/01-config-a.toml"),
+            ("02-config-b.toml", "run/liboverdrop.d/02-config-b.toml"),
+            ("03-config-c.toml", "run/liboverdrop.d/03-config-c.toml"),
+            ("04-config-d.toml", "usr/lib/liboverdrop.d/04-config-d.toml"),
+            ("05-config-e.toml", "etc/liboverdrop.d/05-config-e.toml"),
+            ("06-config-f.toml", "run/liboverdrop.d/06-config-f.toml"),
+            ("07-config-g.toml", "run/liboverdrop.d/07-config-g.toml"),
+        ];
+
+        let dirs = SYSTEMD_CONVENTIONAL_BASES
             .into_iter()
-            .map(|(name, _)| name)
-            .collect();
-        let fragments_keys: Vec<_> = fragments.keys().cloned().collect();
+            .map(|v| treedir.join(v.trim_start_matches('/')));
+        let fragments = scan(dirs, "liboverdrop.d", &["toml"], false);
+
+        for (name, path) in &expected_fragments {
+            let name = OsStr::new(name);
+            let path = treedir.join(path);
+            assert_fragments_match(&fragments, &name, &path);
+        }
+
+        // Check keys are stored in the correct order.
+        let expected_keys: Vec<_> = expected_fragments.into_iter().map(|kv| kv.0).collect();
+        let fragments_keys: Vec<_> = fragments.into_iter().map(|kv| kv.0).collect();
         assert_eq!(fragments_keys, expected_keys);
     }
 
