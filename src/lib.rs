@@ -73,7 +73,8 @@
 use log::trace;
 use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
-use std::fs;
+use std::fs::{self, File};
+use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
 /// The well-known path to the null device used for overrides.
@@ -167,8 +168,42 @@ pub fn scan<BdS: AsRef<Path>, BdI: IntoIterator<Item = BdS>, Sp: AsRef<Path>, As
     files_map
 }
 
+/// This API builds on the [`scan`] functionality, but instead of returning
+/// the file paths, calls a user-provided merge function.
+///
+/// At the current time, this is implemented in a simplistic way that just calls [`scan`] internally.  However,
+/// in the future this API can be more efficient as it isn't required to retain
+/// all found file paths in memory.
+pub fn scan_and_merge<BdS, BdI, Sp, As, F, T, E>(
+    base_dirs: BdI,
+    shared_path: Sp,
+    allowed_extensions: &[As],
+    ignore_dotfiles: bool,
+    mut merge: F,
+) -> Result<T, E>
+where
+    BdS: AsRef<Path>,
+    BdI: IntoIterator<Item = BdS>,
+    Sp: AsRef<Path>,
+    As: AsRef<OsStr>,
+    T: Default,
+    F: FnMut(T, &OsStr, std::io::BufReader<File>) -> Result<T, E>,
+    E: std::error::Error + From<std::io::Error>,
+{
+    let mut res = T::default();
+    for (k, v) in scan(base_dirs, shared_path, allowed_extensions, ignore_dotfiles) {
+        let f = File::open(v).map(BufReader::new)?;
+        res = merge(res, &k, f)?;
+    }
+
+    Ok(res)
+}
+
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+    use std::io::BufRead;
+
     use super::*;
 
     fn assert_fragments_match(
@@ -289,5 +324,48 @@ mod tests {
 
         assert_fragments_hit(&fragments, "config.conf");
         assert_fragments_hit(&fragments, ".hidden.conf");
+    }
+
+    type ConfigMap = HashMap<String, String>;
+
+    // Parse a key=value line by line into a HashSet.  In a real world codebase
+    // this would be more likely to use e.g. serde to parse a toml or yaml file
+    // into a final data structure.
+    fn merge_btreemap(
+        mut f: ConfigMap,
+        name: &OsStr,
+        r: BufReader<File>,
+    ) -> std::io::Result<ConfigMap> {
+        for line in r.lines() {
+            let line = line?;
+            let (k, v) = line.trim().split_once('=').ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Invalid line {line} in file {name:?}"),
+                )
+            })?;
+            f.insert(k.to_owned(), v.to_owned());
+        }
+        Ok(f)
+    }
+
+    #[test]
+    fn basic_merge() {
+        let treedir = "tests/fixtures/tree-configmerge";
+        let dirs = [
+            format!("{}/{}", treedir, "usr/lib"),
+            format!("{}/{}", treedir, "etc"),
+            format!("{}/{}", treedir, "run"),
+        ];
+
+        let config =
+            scan_and_merge(&dirs, "liboverdrop.d", &["conf"], true, merge_btreemap).unwrap();
+
+        assert_eq!(config.get("k1").unwrap(), "test1");
+        assert_eq!(config.get("k2").unwrap(), "test2");
+        assert_eq!(config.get("usrbaseconf").unwrap(), "val01");
+        assert_eq!(config.get("usrbaseconf2").unwrap(), "val02");
+        assert_eq!(config.get("othermasking").unwrap(), "m2");
+        assert_eq!(config.len(), 6);
     }
 }
