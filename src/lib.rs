@@ -40,7 +40,8 @@
 //! ```
 
 use log::trace;
-use std::{collections, fs, path};
+use std::collections::BTreeMap;
+use std::{fs, path};
 
 /// Configuration fragments scanner.
 #[derive(Debug)]
@@ -88,14 +89,14 @@ impl FragmentScanner {
     }
 
     /// Scan unique configuration fragments from the set configuration directories. Returns a
-    /// `collections::BTreeMap` indexed by configuration fragment filename, holding the path where
+    /// `std::collections::BTreeMap` indexed by configuration fragment filename, holding the path where
     /// the unique configuration fragment is located.
     ///
     /// Configuration fragments are stored in the `BTreeMap` in alphanumeric order by filename.
     /// Configuration fragments existing in directories that are scanned later override fragments
     /// of the same filename in directories that are scanned earlier.
-    pub fn scan(&self) -> collections::BTreeMap<String, path::PathBuf> {
-        let mut files_map = collections::BTreeMap::new();
+    pub fn scan(&self) -> BTreeMap<String, path::PathBuf> {
+        let mut files_map = BTreeMap::new();
         for dir in &self.dirs {
             trace!("Scanning directory '{}'", dir.display());
 
@@ -171,7 +172,7 @@ mod tests {
     }
 
     fn assert_fragments_match(
-        fragments: &collections::BTreeMap<String, path::PathBuf>,
+        fragments: &BTreeMap<String, path::PathBuf>,
         filename: &String,
         filepath: &String,
     ) -> () {
@@ -181,17 +182,11 @@ mod tests {
         );
     }
 
-    fn assert_fragments_hit(
-        fragments: &collections::BTreeMap<String, path::PathBuf>,
-        filename: &str,
-    ) -> () {
+    fn assert_fragments_hit(fragments: &BTreeMap<String, path::PathBuf>, filename: &str) -> () {
         assert!(fragments.get(&String::from(filename)).is_some());
     }
 
-    fn assert_fragments_miss(
-        fragments: &collections::BTreeMap<String, path::PathBuf>,
-        filename: &str,
-    ) -> () {
+    fn assert_fragments_miss(fragments: &BTreeMap<String, path::PathBuf>, filename: &str) -> () {
         assert!(fragments.get(&String::from(filename)).is_none());
     }
 
