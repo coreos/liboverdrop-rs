@@ -31,13 +31,13 @@
 //! let fragments = liboverdrop::scan(&base_dirs, "my-crate/config.d", &["toml"], false);
 //!
 //! for (filename, filepath) in fragments {
-//!     println!("fragment '{}' located at '{}'", filename, filepath.display());
+//!     println!("fragment '{}' located at '{}'", filename.to_string_lossy(), filepath.display());
 //! }
 //! ```
 
 use log::trace;
 use std::collections::BTreeMap;
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -68,7 +68,7 @@ pub fn scan<BdS: AsRef<Path>, BdI: IntoIterator<Item = BdS>, Sp: AsRef<Path>, As
     shared_path: Sp,
     allowed_extensions: &[As],
     ignore_dotfiles: bool,
-) -> BTreeMap<String, PathBuf> {
+) -> BTreeMap<OsString, PathBuf> {
     let shared_path = shared_path.as_ref();
 
     let mut files_map = BTreeMap::new();
@@ -82,15 +82,15 @@ pub fn scan<BdS: AsRef<Path>, BdI: IntoIterator<Item = BdS>, Sp: AsRef<Path>, As
         };
         for entry in dir_iter.flatten() {
             let fpath = entry.path();
-            let fname = match entry.file_name().into_string() {
-                Ok(n) => n,
-                _ => continue,
-            };
+            let fname = entry.file_name();
 
             // If hidden files not allowed, ignore dotfiles.
-            if ignore_dotfiles && fname.starts_with('.') {
+            // Rust RFC 900 &c.: there's no way to check if a Path/OsStr starts with a prefix;
+            // instead, we check via to_string_lossy(), which will only allocate if the basename wasn't UTF-8,
+            // and the lossiness doesn't bother us; https://github.com/rust-lang/rfcs/issues/900
+            if ignore_dotfiles && fname.to_string_lossy().starts_with('.') {
                 continue;
-            };
+            }
 
             // If extensions are specified, proceed only if filename has one of the allowed
             // extensions.
@@ -120,8 +120,11 @@ pub fn scan<BdS: AsRef<Path>, BdI: IntoIterator<Item = BdS>, Sp: AsRef<Path>, As
                 continue;
             }
 
-            // TODO(lucab): return something smarter than a PathBuf.
-            trace!("Found config file '{}' at '{}'", fname, fpath.display());
+            trace!(
+                "Found config file '{}' at '{}'",
+                Path::new(&fname).display(),
+                fpath.display()
+            );
             files_map.insert(fname, fpath);
         }
     }
@@ -133,25 +136,23 @@ pub fn scan<BdS: AsRef<Path>, BdI: IntoIterator<Item = BdS>, Sp: AsRef<Path>, As
 mod tests {
     use super::*;
 
-    struct FragmentNamePath {
-        name: String,
-        path: String,
-    }
-
     fn assert_fragments_match(
-        fragments: &BTreeMap<String, PathBuf>,
-        filename: &String,
-        filepath: &String,
-    ) -> () {
-        assert_eq!(fragments.get(filename).unwrap(), &PathBuf::from(filepath));
+        fragments: &BTreeMap<OsString, PathBuf>,
+        filename: &OsStr,
+        filepath: &Path,
+    ) {
+        assert_eq!(fragments.get(filename).unwrap(), filepath);
     }
 
-    fn assert_fragments_hit(fragments: &BTreeMap<String, PathBuf>, filename: &str) -> () {
-        assert!(fragments.get(&String::from(filename)).is_some());
+    fn assert_fragments_hit<T: AsRef<OsStr>>(fragments: &BTreeMap<OsString, PathBuf>, filename: T) {
+        assert!(fragments.get(filename.as_ref()).is_some());
     }
 
-    fn assert_fragments_miss(fragments: &BTreeMap<String, PathBuf>, filename: &str) -> () {
-        assert!(fragments.get(&String::from(filename)).is_none());
+    fn assert_fragments_miss<T: AsRef<OsStr>>(
+        fragments: &BTreeMap<OsString, PathBuf>,
+        filename: T,
+    ) {
+        assert!(fragments.get(filename.as_ref()).is_none());
     }
 
     #[test]
@@ -163,46 +164,49 @@ mod tests {
             format!("{}/{}", treedir, "etc"),
         ];
 
-        let expected_fragments = vec![
-            FragmentNamePath {
-                name: String::from("01-config-a.toml"),
-                path: treedir.to_owned() + "/etc/liboverdrop.d/01-config-a.toml",
-            },
-            FragmentNamePath {
-                name: String::from("02-config-b.toml"),
-                path: treedir.to_owned() + "/run/liboverdrop.d/02-config-b.toml",
-            },
-            FragmentNamePath {
-                name: String::from("03-config-c.toml"),
-                path: treedir.to_owned() + "/etc/liboverdrop.d/03-config-c.toml",
-            },
-            FragmentNamePath {
-                name: String::from("04-config-d.toml"),
-                path: treedir.to_owned() + "/usr/lib/liboverdrop.d/04-config-d.toml",
-            },
-            FragmentNamePath {
-                name: String::from("05-config-e.toml"),
-                path: treedir.to_owned() + "/etc/liboverdrop.d/05-config-e.toml",
-            },
-            FragmentNamePath {
-                name: String::from("06-config-f.toml"),
-                path: treedir.to_owned() + "/run/liboverdrop.d/06-config-f.toml",
-            },
-            FragmentNamePath {
-                name: String::from("07-config-g.toml"),
-                path: treedir.to_owned() + "/etc/liboverdrop.d/07-config-g.toml",
-            },
+        let expected_fragments = [
+            (
+                OsString::from("01-config-a.toml"),
+                Path::new(treedir).join("etc/liboverdrop.d/01-config-a.toml"),
+            ),
+            (
+                OsString::from("02-config-b.toml"),
+                Path::new(treedir).join("run/liboverdrop.d/02-config-b.toml"),
+            ),
+            (
+                OsString::from("03-config-c.toml"),
+                Path::new(treedir).join("etc/liboverdrop.d/03-config-c.toml"),
+            ),
+            (
+                OsString::from("04-config-d.toml"),
+                Path::new(treedir).join("usr/lib/liboverdrop.d/04-config-d.toml"),
+            ),
+            (
+                OsString::from("05-config-e.toml"),
+                Path::new(treedir).join("etc/liboverdrop.d/05-config-e.toml"),
+            ),
+            (
+                OsString::from("06-config-f.toml"),
+                Path::new(treedir).join("run/liboverdrop.d/06-config-f.toml"),
+            ),
+            (
+                OsString::from("07-config-g.toml"),
+                Path::new(treedir).join("etc/liboverdrop.d/07-config-g.toml"),
+            ),
         ];
 
         let fragments = scan(&dirs, "liboverdrop.d", &["toml"], false);
 
-        for frag in &expected_fragments {
-            assert_fragments_match(&fragments, &frag.name, &frag.path);
+        for (name, path) in &expected_fragments {
+            assert_fragments_match(&fragments, &name, &path);
         }
 
         // Check keys are stored in the correct order.
-        let expected_keys: Vec<String> = expected_fragments.into_iter().map(|x| x.name).collect();
-        let fragments_keys: Vec<String> = fragments.keys().cloned().collect();
+        let expected_keys: Vec<_> = expected_fragments
+            .into_iter()
+            .map(|(name, _)| name)
+            .collect();
+        let fragments_keys: Vec<_> = fragments.keys().cloned().collect();
         assert_eq!(fragments_keys, expected_keys);
     }
 
@@ -221,7 +225,7 @@ mod tests {
     #[test]
     fn basic_override_allow_all_extensions() {
         let treedir = "tests/fixtures/tree-basic";
-        let dirs = vec![format!("{}/{}", treedir, "etc")];
+        let dirs = [format!("{}/{}", treedir, "etc")];
 
         let fragments = scan::<_, _, _, &str>(&dirs, "liboverdrop.d", &[], false);
 
