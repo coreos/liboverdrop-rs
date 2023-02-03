@@ -20,15 +20,11 @@
 //! # use liboverdrop;
 //! // Scan for fragments under:
 //! //  * /usr/lib/my-crate/config.d/*.toml
-//! //  * /run/my-crate/config.d/*.toml
+//! //  * /usr/local/lib/my-crate/config.d/*.toml
 //! //  * /etc/my-crate/config.d/*.toml
+//! //  * /run/my-crate/config.d/*.toml
 //!
-//! let base_dirs = [
-//!     "/usr/lib",
-//!     "/run",
-//!     "/etc",
-//! ];
-//! let fragments = liboverdrop::scan(&base_dirs, "my-crate/config.d", &["toml"], false);
+//! let fragments = liboverdrop::scan(liboverdrop::SYSTEMD_CONVENTIONAL_BASES, "my-crate/config.d", &["toml"], false);
 //!
 //! for (filename, filepath) in fragments {
 //!     println!("fragment '{}' located at '{}'", filename.to_string_lossy(), filepath.display());
@@ -93,6 +89,7 @@ pub const SYSTEMD_CONVENTIONAL_BASES: &[&str] = &["/usr/lib", "/usr/local/lib", 
 /// # Arguments
 ///
 /// * `base_dirs` - Base components of directories where configuration fragments are located.
+///    System services will usually want [`SYSTEMD_CONVENTIONAL_BASES`] here.
 /// * `shared_path` - Common relative path from each entry in `base_dirs` to the directory
 ///                   holding configuration fragments.
 /// * `allowed_extensions` - Only scan files that have an extension listed in `allowed_extensions`.
