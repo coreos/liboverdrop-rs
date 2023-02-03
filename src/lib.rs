@@ -40,7 +40,7 @@
 //! ```
 
 use log::trace;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 
@@ -98,6 +98,11 @@ impl FragmentScanner {
     /// of the same filename in directories that are scanned earlier.
     pub fn scan(&self) -> BTreeMap<String, PathBuf> {
         let mut files_map = BTreeMap::new();
+        let allowed_extensions = self
+            .allowed_extensions
+            .iter()
+            .map(|v| v.as_str())
+            .collect::<HashSet<_>>();
         for dir in &self.dirs {
             trace!("Scanning directory '{}'", dir.display());
 
@@ -124,12 +129,8 @@ impl FragmentScanner {
                 // If extensions are specified, proceed only if filename has one of the allowed
                 // extensions.
                 if !self.allowed_extensions.is_empty() {
-                    if let Some(extension) = fpath.extension() {
-                        if let Ok(extension) = &extension.to_owned().into_string() {
-                            if !self.allowed_extensions.contains(extension) {
-                                continue;
-                            }
-                        } else {
+                    if let Some(extension) = fpath.extension().and_then(|e| e.to_str()) {
+                        if !allowed_extensions.contains(extension) {
                             continue;
                         }
                     } else {
