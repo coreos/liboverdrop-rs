@@ -242,7 +242,7 @@ mod tests {
         let fragments = scan(&dirs, "liboverdrop.d", &["toml"], false);
 
         for (name, path) in &expected_fragments {
-            assert_fragments_match(&fragments, &name, &path);
+            assert_fragments_match(&fragments, name, path);
         }
 
         // Check keys are stored in the correct order.
@@ -266,14 +266,14 @@ mod tests {
         ];
 
         let dirs = SYSTEMD_CONVENTIONAL_BASES
-            .into_iter()
+            .iter()
             .map(|v| treedir.join(v.trim_start_matches('/')));
         let fragments = scan(dirs, "liboverdrop.d", &["toml"], false);
 
         for (name, path) in &expected_fragments {
             let name = OsStr::new(name);
             let path = treedir.join(path);
-            assert_fragments_match(&fragments, &name, &path);
+            assert_fragments_match(&fragments, name, &path);
         }
 
         // Check keys are stored in the correct order.
@@ -287,7 +287,7 @@ mod tests {
         let treedir = "tests/fixtures/tree-basic";
         let dirs = [format!("{}/{}", treedir, "etc")];
 
-        let fragments = scan(&dirs, "liboverdrop.d", &["toml"], false);
+        let fragments = scan(dirs, "liboverdrop.d", &["toml"], false);
 
         assert_fragments_hit(&fragments, "01-config-a.toml");
         assert_fragments_miss(&fragments, "08-config-h.conf");
