@@ -6,7 +6,7 @@ license = "MIT OR Apache-2.0"
 authors = ["Luca Bruno <luca.bruno@coreos.com>", "Robert Fairley <rfairley@redhat.com>"]
 repository = "https://github.com/coreos/liboverdrop-rs"
 readme = "README.md"
-rust-version = "1.56.0"
+rust-version = "1.64.0"
 edition = "2021"
 exclude = [".gitignore", ".github"]
 
