@@ -88,6 +88,7 @@ const DEVNULL: &str = "/dev/null";
 /// area from the OS image base.  To do so, one can explicitly filter it out from this set.
 pub const SYSTEMD_CONVENTIONAL_BASES: &[&str] = &["/usr/lib", "/usr/local/lib", "/etc", "/run"];
 
+#[allow(clippy::doc_overindented_list_items)]
 /// Scan unique configuration fragments from the configuration directories specified.
 ///
 /// # Arguments
