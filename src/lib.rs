@@ -11,6 +11,7 @@
 //!  * fragments are identified by unique filenames, lexicographically (e.g. `50-default-limits.conf`).
 //!  * in case of name duplication, last directory wins (e.g. `/etc/svc/custom.conf` can override `/usr/lib/svc/custom.conf`).
 //!  * a fragment symlinked to `/dev/null` is used to ignore any previous fragment with the same filename.
+//!  * any other symlinked fragment is read from the regular file it points to.
 //!
 //! [reproducible]: http://0pointer.net/blog/projects/stateless.html
 //!
@@ -149,19 +150,28 @@ pub fn scan<BdS: AsRef<Path>, BdI: IntoIterator<Item = BdS>, Sp: AsRef<Path>, As
                 }
             }
 
-            // Check filetype, ignore non-file.
-            let meta = match entry.metadata() {
-                Ok(m) => m,
+            let file_type = match entry.file_type() {
+                Ok(t) => t,
                 _ => continue,
             };
-            if !meta.file_type().is_file() {
+            if file_type.is_symlink() {
                 if let Ok(target) = fs::read_link(&fpath) {
                     // A devnull symlink is a special case to ignore previous file-names.
                     if target == Path::new(DEVNULL) {
                         trace!("Nulled config file '{}'", fpath.display());
                         files_map.remove(&fname);
+                        continue;
                     }
                 }
+            }
+
+            // Check filetype, ignore non-file. Other symlinks are followed, so a
+            // fragment linked from elsewhere counts as the file it points to.
+            let meta = match fs::metadata(&fpath) {
+                Ok(m) => m,
+                _ => continue,
+            };
+            if !meta.file_type().is_file() {
                 continue;
             }
 
@@ -327,5 +337,53 @@ mod tests {
 
         assert_fragments_hit(&fragments, "config.conf");
         assert_fragments_hit(&fragments, ".hidden.conf");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_fragments() {
+        use std::os::unix::fs::symlink;
+
+        // The tree is built at runtime: `cargo package` cannot archive dangling
+        // symlinks and flattens the others, so they cannot live in tests/fixtures.
+        let treedir = std::env::temp_dir().join(format!(
+            "liboverdrop-symlinked-fragments-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&treedir);
+        let vendor = treedir.join("usr/lib/liboverdrop.d");
+        let admin = treedir.join("etc/liboverdrop.d");
+        let shared = treedir.join("shared");
+        for dir in [&vendor, &admin, &shared] {
+            fs::create_dir_all(dir).unwrap();
+        }
+        fs::write(shared.join("linked.toml"), "").unwrap();
+        fs::write(vendor.join("02-masked.toml"), "").unwrap();
+        fs::write(vendor.join("05-overridden.toml"), "").unwrap();
+        symlink("../../shared/linked.toml", admin.join("01-linked.toml")).unwrap();
+        symlink(DEVNULL, admin.join("02-masked.toml")).unwrap();
+        symlink("../../shared/missing.toml", admin.join("03-dangling.toml")).unwrap();
+        symlink("../../shared", admin.join("04-directory.toml")).unwrap();
+        symlink("../../shared/linked.toml", admin.join("05-overridden.toml")).unwrap();
+        symlink("06-loop.toml", admin.join("06-loop.toml")).unwrap();
+
+        let dirs = [treedir.join("usr/lib"), treedir.join("etc")];
+        let fragments = scan(&dirs, "liboverdrop.d", &["toml"], false);
+        fs::remove_dir_all(&treedir).unwrap();
+
+        assert_fragments_match(
+            &fragments,
+            OsStr::new("01-linked.toml"),
+            &admin.join("01-linked.toml"),
+        );
+        assert_fragments_miss(&fragments, "02-masked.toml");
+        assert_fragments_miss(&fragments, "03-dangling.toml");
+        assert_fragments_miss(&fragments, "04-directory.toml");
+        assert_fragments_match(
+            &fragments,
+            OsStr::new("05-overridden.toml"),
+            &admin.join("05-overridden.toml"),
+        );
+        assert_fragments_miss(&fragments, "06-loop.toml");
     }
 }
