@@ -6,6 +6,7 @@ Changes:
 
 - Require Rust ≥ 1.68.0
 - Add release notes doc
+- Follow symlinked fragments instead of silently skipping them
 
 New contributors:
 

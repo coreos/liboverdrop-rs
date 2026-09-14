@@ -11,6 +11,7 @@
 //!  * fragments are identified by unique filenames, lexicographically (e.g. `50-default-limits.conf`).
 //!  * in case of name duplication, last directory wins (e.g. `/etc/svc/custom.conf` can override `/usr/lib/svc/custom.conf`).
 //!  * a fragment symlinked to `/dev/null` is used to ignore any previous fragment with the same filename.
+//!  * any other symlinked fragment is read from the regular file it points to.
 //!
 //! [reproducible]: http://0pointer.net/blog/projects/stateless.html
 //!
@@ -149,19 +150,28 @@ pub fn scan<BdS: AsRef<Path>, BdI: IntoIterator<Item = BdS>, Sp: AsRef<Path>, As
                 }
             }
 
-            // Check filetype, ignore non-file.
-            let meta = match entry.metadata() {
-                Ok(m) => m,
+            let file_type = match entry.file_type() {
+                Ok(t) => t,
                 _ => continue,
             };
-            if !meta.file_type().is_file() {
+            if file_type.is_symlink() {
                 if let Ok(target) = fs::read_link(&fpath) {
                     // A devnull symlink is a special case to ignore previous file-names.
                     if target == Path::new(DEVNULL) {
                         trace!("Nulled config file '{}'", fpath.display());
                         files_map.remove(&fname);
+                        continue;
                     }
                 }
+            }
+
+            // Check filetype, ignore non-file. Other symlinks are followed, so a
+            // fragment linked from elsewhere counts as the file it points to.
+            let meta = match fs::metadata(&fpath) {
+                Ok(m) => m,
+                _ => continue,
+            };
+            if !meta.file_type().is_file() {
                 continue;
             }
 
@@ -327,5 +337,25 @@ mod tests {
 
         assert_fragments_hit(&fragments, "config.conf");
         assert_fragments_hit(&fragments, ".hidden.conf");
+    }
+
+    #[test]
+    fn symlinked_fragments() {
+        let treedir = "tests/fixtures/tree-symlinks";
+        let dirs = [
+            format!("{}/{}", treedir, "usr/lib"),
+            format!("{}/{}", treedir, "etc"),
+        ];
+
+        let fragments = scan(&dirs, "liboverdrop.d", &["toml"], false);
+
+        assert_fragments_match(
+            &fragments,
+            OsStr::new("01-linked.toml"),
+            &Path::new(treedir).join("etc/liboverdrop.d/01-linked.toml"),
+        );
+        assert_fragments_miss(&fragments, "02-masked.toml");
+        assert_fragments_miss(&fragments, "03-dangling.toml");
+        assert_fragments_miss(&fragments, "04-directory.toml");
     }
 }

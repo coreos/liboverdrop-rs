@@ -17,6 +17,7 @@ following these rules:
  * fragments are identified by unique filenames, lexicographically (e.g. `50-default-limits.conf`).
  * in case of name duplication, last directory wins (e.g. `/etc/svc/custom.conf` can override `/usr/lib/svc/custom.conf`).
  * a fragment symlinked to `/dev/null` is used to ignore any previous fragment with the same filename.
+ * any other symlinked fragment is read from the regular file it points to.
 
 [reproducible]: http://0pointer.net/blog/projects/stateless.html
 
