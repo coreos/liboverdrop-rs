@@ -339,23 +339,51 @@ mod tests {
         assert_fragments_hit(&fragments, ".hidden.conf");
     }
 
+    #[cfg(unix)]
     #[test]
     fn symlinked_fragments() {
-        let treedir = "tests/fixtures/tree-symlinks";
-        let dirs = [
-            format!("{}/{}", treedir, "usr/lib"),
-            format!("{}/{}", treedir, "etc"),
-        ];
+        use std::os::unix::fs::symlink;
 
+        // The tree is built at runtime: `cargo package` cannot archive dangling
+        // symlinks and flattens the others, so they cannot live in tests/fixtures.
+        let treedir = std::env::temp_dir().join(format!(
+            "liboverdrop-symlinked-fragments-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&treedir);
+        let vendor = treedir.join("usr/lib/liboverdrop.d");
+        let admin = treedir.join("etc/liboverdrop.d");
+        let shared = treedir.join("shared");
+        for dir in [&vendor, &admin, &shared] {
+            fs::create_dir_all(dir).unwrap();
+        }
+        fs::write(shared.join("linked.toml"), "").unwrap();
+        fs::write(vendor.join("02-masked.toml"), "").unwrap();
+        fs::write(vendor.join("05-overridden.toml"), "").unwrap();
+        symlink("../../shared/linked.toml", admin.join("01-linked.toml")).unwrap();
+        symlink(DEVNULL, admin.join("02-masked.toml")).unwrap();
+        symlink("../../shared/missing.toml", admin.join("03-dangling.toml")).unwrap();
+        symlink("../../shared", admin.join("04-directory.toml")).unwrap();
+        symlink("../../shared/linked.toml", admin.join("05-overridden.toml")).unwrap();
+        symlink("06-loop.toml", admin.join("06-loop.toml")).unwrap();
+
+        let dirs = [treedir.join("usr/lib"), treedir.join("etc")];
         let fragments = scan(&dirs, "liboverdrop.d", &["toml"], false);
+        fs::remove_dir_all(&treedir).unwrap();
 
         assert_fragments_match(
             &fragments,
             OsStr::new("01-linked.toml"),
-            &Path::new(treedir).join("etc/liboverdrop.d/01-linked.toml"),
+            &admin.join("01-linked.toml"),
         );
         assert_fragments_miss(&fragments, "02-masked.toml");
         assert_fragments_miss(&fragments, "03-dangling.toml");
         assert_fragments_miss(&fragments, "04-directory.toml");
+        assert_fragments_match(
+            &fragments,
+            OsStr::new("05-overridden.toml"),
+            &admin.join("05-overridden.toml"),
+        );
+        assert_fragments_miss(&fragments, "06-loop.toml");
     }
 }
